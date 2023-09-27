@@ -31,6 +31,8 @@ futures = { version = "0.3.27", optional = true }
 aead = { version = "0.5", features = ["alloc"], optional = true }
 aes-gcm = { version = "0.10", optional = true }
 
+reck = { path = "./../reck" }
+
 # For the Web Crypto backend.
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }

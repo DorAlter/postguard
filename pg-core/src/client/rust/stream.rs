@@ -9,9 +9,7 @@ use crate::identity::{EncryptionPolicy, Policy};
 use ibe::kem::cgw_kv::CGWKV;
 use ibs::gg::{Identity, Signature, Signer, Verifier, SIG_BYTES};
 
-use aead::stream::{DecryptorBE32, EncryptorBE32};
-use aead::KeyInit;
-use aes_gcm::Aes128Gcm;
+use reck::Deck;
 use alloc::vec::Vec;
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::io::{AsyncReadExt, AsyncWriteExt};
@@ -110,8 +108,9 @@ impl<'r, Rng: RngCore + CryptoRng> Sealer<'r, Rng, SealerStreamConfig> {
             .await?;
         w.write_all(&header_sig_bytes).await?;
 
-        let aead = Aes128Gcm::new_from_slice(&self.config.key)?;
-        let mut enc = EncryptorBE32::from_aead(aead, &self.config.nonce.into());
+        //let aead = Aes128Gcm::new_from_slice(&self.config.key)?;
+        //let mut enc = EncryptorBE32::from_aead(aead, &self.config.nonce.into());
+        let mut enc = Deck::new(&self.config.key, &self.config.nonce);
 
         // Check for a private signing key, otherwise fall back to the public one.
         let signing_key = self.priv_sign_key.unwrap_or(self.pub_sign_key);
@@ -153,7 +152,7 @@ impl<'r, Rng: RngCore + CryptoRng> Sealer<'r, Rng, SealerStreamConfig> {
                     .sign(&signing_key.key.0, self.rng);
                 bincode::serialize_into(&mut buf, &sig)?;
 
-                enc.encrypt_next_in_place(b"", &mut buf)?;
+                enc.wrap(&mut buf).unwrap();
 
                 w.write_all(&buf).await?;
 
@@ -172,7 +171,7 @@ impl<'r, Rng: RngCore + CryptoRng> Sealer<'r, Rng, SealerStreamConfig> {
                     .sign(&signing_key.key.0, self.rng);
                 bincode::serialize_into(&mut buf, &sig_final)?;
 
-                enc.encrypt_last_in_place(b"", &mut buf)?;
+                enc.wrap_last(&mut buf).unwrap();
 
                 w.write_all(&buf).await?;
                 break;
@@ -260,12 +259,12 @@ where
 
         let ss = rec_info.decaps(usk)?;
         let key = &ss.0[..KEY_SIZE];
-        let aead = Aes128Gcm::new_from_slice(key)?;
+        //let aead = Aes128Gcm::new_from_slice(key)?;
 
         let Algorithm::Aes128Gcm(iv) = self.header.algo;
         let nonce = &iv.0[..STREAM_NONCE_SIZE];
 
-        let mut dec = DecryptorBE32::from_aead(aead, nonce.into());
+        let mut dec =  Deck::new(&key, &nonce);
 
         let bufsize: usize = self.config.segment_size as usize + SIG_BYTES + TAG_SIZE;
         let mut buf = vec![0u8; bufsize];
@@ -315,7 +314,7 @@ where
             buf_tail += read;
 
             if buf_tail == bufsize {
-                dec.decrypt_next_in_place(b"", &mut buf)?;
+                dec.unwrap(&mut buf).unwrap();
 
                 if counter == 0 {
                     pol_id = extract_policy(&mut buf)?;
@@ -337,7 +336,7 @@ where
                 counter += 1;
             } else if read == 0 {
                 buf.truncate(buf_tail);
-                dec.decrypt_last_in_place(b"", &mut buf)?;
+                dec.unwrap_last(&mut buf).unwrap();
 
                 if counter == 0 {
                     pol_id = extract_policy(&mut buf)?;
