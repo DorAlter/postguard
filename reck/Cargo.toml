@@ -1,0 +1,27 @@
+[package]
+name = "reck"
+version = "0.1.0"
+edition = "2021"
+exclude = ["./src/test_vector_bytes.txt"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# xoofff = "0.1.1"
+xoofff = { git = "https://github.com/leonbotros/xoofff.git", branch = "simd" }
+
+[dev-dependencies]
+criterion = "0.5.1"
+rand = "0.8.5"
+test-case = "3.1.0"
+hex = "0.4.3"
+
+[target.'cfg(any(target_arch = "x86_64", target_arch = "x86"))'.dependencies]
+criterion-cycles-per-byte = "0.5.0"
+
+[features]
+simd = ["xoofff/simd"]
+
+[[bench]]
+name = "bench"
+harness = false
